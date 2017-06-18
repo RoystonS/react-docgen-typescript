@@ -29,6 +29,30 @@ function isNodeExported(node: ts.Node): boolean {
     return false;
 }
 
+/**
+ * Extracts a full JsDoc comment from a symbol, even
+ * thought TypeScript has broken down the JsDoc comment into plain
+ * text and JsDoc tags.
+ */
+function getFullJsDocComment(symbol: ts.Symbol) {
+    if (!symbol) {
+        return '';
+    }
+
+    const mainComment = ts.displayPartsToString(symbol.getDocumentationComment());
+
+    const tags = symbol.getJsDocTags() || [];
+    const tagComments = tags.map(t => {
+        let result = '@' + t.name;
+        if (t.text) {
+            result += ' ' + t.text;
+        }
+        return result;
+    });
+
+    return (mainComment + '\n' + tagComments.join('\n')).trim();
+}
+
 function getType(prop: ts.PropertySignature): MemberType {
     const unionType = prop.type as ts.UnionTypeNode;
     if (unionType && unionType.types) {
@@ -68,7 +92,7 @@ function getProperties(checker: ts.TypeChecker, type: ts.Type, parent: ts.Node):
                 type: typeInfo.type,
                 values: typeInfo.values || [],
                 isRequired: !prop.questionToken,
-                comment: ts.displayPartsToString(symbol.getDocumentationComment()).trim(),
+                comment: getFullJsDocComment(symbol),
             };
         });
 }
@@ -135,7 +159,7 @@ export function transformAST(sourceFile: ts.SourceFile, checker: ts.TypeChecker)
             return { 
                 name: identifier.text,
                 exported: isNodeExported(i),
-                comment: symbol ? ts.displayPartsToString(symbol.getDocumentationComment()).trim() : '',
+                comment: getFullJsDocComment(symbol),
                 type: varType.symbol ? varType.symbol.getName() : 'unknown',
                 kind,
                 arrowFunctionType,
@@ -153,7 +177,7 @@ export function transformAST(sourceFile: ts.SourceFile, checker: ts.TypeChecker)
             const type = checker.getTypeAtLocation(i.name);
             return {
                 name: symbol.name,
-                comment: ts.displayPartsToString(symbol.getDocumentationComment()).trim(),
+                comment: getFullJsDocComment(symbol),
                 exported: isNodeExported(i),
                 properties: getProperties(checker, type, i),
             };
@@ -187,7 +211,7 @@ export function transformAST(sourceFile: ts.SourceFile, checker: ts.TypeChecker)
                 name: symbol.name,
                 exported: isNodeExported(i),
                 baseType: baseType,
-                comment: ts.displayPartsToString(symbol.getDocumentationComment()).trim(),
+                comment: getFullJsDocComment(symbol),
                 methods: getMethods(checker, type, i),
             };
         });
@@ -216,7 +240,7 @@ export function transformAST(sourceFile: ts.SourceFile, checker: ts.TypeChecker)
                     name: i.name.getText(),
                     properties,
                     exported: isNodeExported(i),
-                    comment: !symbol ? "" : ts.displayPartsToString(symbol.getDocumentationComment())
+                    comment: getFullJsDocComment(symbol)
                 };
             });
 
